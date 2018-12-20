@@ -10,6 +10,7 @@
 
 add_library(bootloader bootloader.c)
 
+add_subdirectory(bl_crypto)
 target_link_libraries(bootloader PRIVATE bl_crypto)
 
 add_subdirectory(c_runtime_setup)
@@ -192,7 +193,15 @@ endif()
 if(DEFINED DT_FLASH_AREA_PROVISION_OFFSET)
 	set(PROVISION_ADDR ${DT_FLASH_AREA_PROVISION_OFFSET})
 else()
-	if(CONFIG_SOC_NRF52832)
+	if(CONFIG_SOC_NRF51822_QFAA)
+		set(PROVISION_ADDR 0x3f000)
+	elseif(CONFIG_SOC_NRF51822_QFAB)
+		set(PROVISION_ADDR 0x1f000)
+	elseif(CONFIG_SOC_NRF51822_QFAC)
+		set(PROVISION_ADDR 0x3f000)
+	elseif(CONFIG_SOC_NRF52810_QFAA)
+		set(PROVISION_ADDR 0x2f000)
+	elseif(CONFIG_SOC_NRF52832)
 		set(PROVISION_ADDR 0x7f000)
 	elseif(CONFIG_SOC_NRF9160)
 		set(PROVISION_ADDR 0xFF8108) # UICR->OTP
@@ -212,7 +221,7 @@ add_custom_command(
   --provision-addr ${PROVISION_ADDR}
   --public-key-files "${SIGNATURE_PUBLIC_KEY_FILE},${PUBLIC_KEY_FILES}"
   --output ${PROVISION_HEX}
-  DEPENDS ${PROVISION_DEPENDS}
+  DEPENDS ${PROVISION_DEPENDS} ${public_key_file}
   WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
   COMMENT
   "Creating provision data for Bootloader, storing to ${PROVISION_HEX_NAME}"
