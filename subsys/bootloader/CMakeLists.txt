@@ -15,7 +15,6 @@ target_link_libraries(bootloader PRIVATE bl_crypto)
 
 add_subdirectory(c_runtime_setup)
 target_link_libraries(bootloader PRIVATE c_runtime_setup)
-
 add_subdirectory(provision)
 target_link_libraries(bootloader PRIVATE provision)
 
