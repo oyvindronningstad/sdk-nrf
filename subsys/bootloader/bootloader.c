@@ -171,6 +171,8 @@ static void boot_from(u32_t *address)
 
 	VTOR = (u32_t)address;
 
+	abi_provide((u32_t)address);
+
 	/* Set MSP to the new address and clear any information from PSP */
 	__set_MSP(address[0]);
 	__set_PSP(0);

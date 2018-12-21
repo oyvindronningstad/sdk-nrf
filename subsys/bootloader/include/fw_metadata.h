@@ -24,8 +24,27 @@
 #include <stddef.h>
 #include <toolchain.h>
 #include <assert.h>
+#include <string.h>
+#include <debug.h>
 
 #define MAGIC_LEN_WORDS (CONFIG_SB_MAGIC_LEN / sizeof(u32_t))
+
+struct fw_abi_info;
+
+/**@brief Function that returns an ABI.
+ *
+ * @param[in]    id      Which ABI to get.
+ * @param[in]    index   If there are multiple ABIs available with the same ID,
+ *                       retrieve the different ones with this.
+ * @param[out]   abi     Pointer to the abi with the given id and index.
+ *
+ * @retval 0        Success.
+ * @retval -ENOENT  id not found.
+ * @retval -EBADF   index too large.
+ * @retval -EFAULT  abi was NULL.
+ */
+typedef int (*fw_abi_getter)(u32_t id, u32_t index,
+				const struct fw_abi_info **abi);
 
 struct __packed fw_firmware_info {
 	/* Magic value to verify that the struct has the correct type. */
@@ -39,11 +58,17 @@ struct __packed fw_firmware_info {
 
 	/* The address of the start (vector table) of the firmware. */
 	u32_t firmware_address;
+
+	/* Where to place the getter for the ABI provided to this firmware. */
+	fw_abi_getter *abi_in;
+
+	/* This firmware's ABI getter. */
+	const fw_abi_getter abi_out;
 };
 
 
 #define OFFSET_CHECK(type, member, value) \
-		static_assert(offsetof(type, member) == value, \
+		BUILD_ASSERT_MSG(offsetof(type, member) == value, \
 				#member " has wrong offset")
 
 /* Static asserts to ensure compatibility */
@@ -53,6 +78,9 @@ OFFSET_CHECK(struct fw_firmware_info, firmware_version,
 	(CONFIG_SB_MAGIC_LEN + 4));
 OFFSET_CHECK(struct fw_firmware_info, firmware_address,
 	(CONFIG_SB_MAGIC_LEN + 8));
+
+/* For declaring this firmware's firmware info. */
+#define __fw_info Z_GENERIC_SECTION(.firmware_info) __attribute__((used)) const
 
 struct __packed fw_validation_info {
 	/* Magic value to verify that the struct has the correct type. */
@@ -102,12 +130,74 @@ OFFSET_CHECK(struct fw_validation_pointer, validation_info,
 	CONFIG_SB_MAGIC_LEN);
 
 
+/* This struct is meant to serve as a header before a list of function pointers
+ * (or something else) that constitute the actual ABI. How to use the ABI, such
+ * as the signatures of all the functions in the list must be unambiguous for an
+ * ID/version combination.
+ */
+struct __packed fw_abi_info {
+	/* Magic value to verify that the struct has the correct type. */
+	u32_t magic[MAGIC_LEN_WORDS];
+
+	/* The id of the ABI. */
+	u32_t abi_id;
+
+	/* Flags specifying properties of the ABI. */
+	u32_t abi_flags;
+
+	/* The version of this ABI. */
+	u32_t abi_version;
+
+	/* The length of this header plus everything after this header. Must be
+	 * word-aligned.
+	 */
+	u32_t abi_len;
+};
+
+
+#define OFFSET_CHECK_EXT_ABI(type, member, value) \
+	BUILD_ASSERT_MSG(offsetof(type, header.member) == value, \
+		"ext_abi " #type " has wrong offset for header." #member)
+
+#define __ext_abi(type, name) \
+	OFFSET_CHECK_EXT_ABI(type, magic, 0); \
+	OFFSET_CHECK_EXT_ABI(type, abi_id, CONFIG_SB_MAGIC_LEN); \
+	OFFSET_CHECK_EXT_ABI(type, abi_flags, (CONFIG_SB_MAGIC_LEN + 4)); \
+	OFFSET_CHECK_EXT_ABI(type, abi_version, (CONFIG_SB_MAGIC_LEN + 8)); \
+	OFFSET_CHECK_EXT_ABI(type, abi_len, (CONFIG_SB_MAGIC_LEN + 12)); \
+	BUILD_ASSERT_MSG((sizeof(type) % 4) == 0, \
+			"ext_abi " #type " is not word-aligned"); \
+	extern const type name; \
+	Z_GENERIC_SECTION(.ext_abis) __attribute__((used)) \
+	const type * const _CONCAT(name, _ptr) = &name; \
+	__attribute__((used)) \
+	const type name
+
+
+
+#define ABI_INFO_INIT(id, flags, version, total_size) \
+	{ \
+		.magic = {ABI_INFO_MAGIC}, \
+		.abi_id = id, \
+		.abi_flags = flags, \
+		.abi_version = version, \
+		.abi_len = total_size, \
+	}
+
+/* Shorthand for declaring function that will be exposed through an ext_abi.
+ * This will define a function pointer type as well as declare the function.
+ */
+#define EXT_ABI_FUNCTION(retval, name, ...) \
+	typedef retval (*name ## _t) (__VA_ARGS__); \
+	retval name (__VA_ARGS__)
+
+
 /* All parameters must be word-aligned */
 static inline bool memeq_32(const void *expected, const void *actual, u32_t len)
 {
-	__ASSERT(!((u32_t)expected & 3)
-	      && !((u32_t)actual & 3)
-	      && !((u32_t)len & 3),
+	__ASSERT(!((u32_t)expected % 4)
+	      && !((u32_t)actual % 4)
+	      && !((u32_t)len % 4),
 		"A parameter is unaligned.");
 	const u32_t *expected_32 = (const u32_t *) expected;
 	const u32_t *actual_32   = (const u32_t *) actual;
@@ -135,7 +225,7 @@ static inline bool memeq_8(const void *expected, const void *actual, u32_t len)
 
 static inline bool memeq(const void *expected, const void *actual, u32_t len)
 {
-	if (((u32_t)expected & 3) || ((u32_t)actual & 3) || ((u32_t)len & 3)) {
+	if (((u32_t)expected % 4) || ((u32_t)actual % 4) || ((u32_t)len % 4)) {
 		/* Parameters are not word aligned. */
 		return memeq_8(expected, actual, len);
 	} else {
@@ -176,5 +266,43 @@ validation_info_find(const struct fw_firmware_info *finfo,
 	}
 	return NULL;
 }
+
+
+/* Check a fw_abi_info pointer. */
+static inline bool abi_info_check(const struct fw_abi_info *abi_info)
+{
+	const u32_t abi_info_magic[] = {ABI_INFO_MAGIC};
+	return(memeq(abi_info->magic, abi_info_magic, CONFIG_SB_MAGIC_LEN));
+}
+
+
+/* Expose ABIs to the firmware at this address. This is meant to be called
+ * immediately before booting the aforementioned firmware since it will likely
+ * corrupt the memory of the running firmware.
+ */
+void abi_provide(u32_t address);
+
+/* Get a single ABI.
+ *
+ * @param[in]    id      Which ABI to get.
+ * @param[in]    index   If there are multiple ABIs available with the same ID,
+ *                       retrieve the different ones with this.
+ *
+ * @return The ABI, or NULL, if it wasn't found.
+ */
+const struct fw_abi_info *abi_get(u32_t id, u32_t index);
+
+/* Find an ABI based on a version range.
+ *
+ * @param[in]  id           The ID of the ABI to find.
+ * @param[in]  flags        The required flags of the ABI to find. The returned
+ *                          ABI may have other flags set as well.
+ * @param[in]  min_version  The minimum acceptable ABI version.
+ * @param[in]  max_version  One more than the maximum acceptable ABI version.
+ *
+ * @return The ABI, or NULL if none was found.
+ */
+const struct fw_abi_info *abi_find(u32_t id, u32_t flags, u32_t min_version,
+					u32_t max_version);
 
 #endif
