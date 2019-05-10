@@ -4,6 +4,7 @@ Partition Manager
 #################
 
 Partition Manager is a python script which sets the start address and size of all image partitions in a multi image build context.
+See :ref:`application` for a description of multi image building.
 An image partition is the flash area reserved for an image, to which the image binary is written.
 The start address and size of partitions not containing images are also set.
 The values set by Partition Manager are exposed through generated files.
@@ -18,8 +19,8 @@ Overview
 The Partition Manager script reads a set of Partition Manager configurations.
 Using this information it deduces the start address and size of each partition.
 
-In a multi image build context there exist one root image, and one or more sub-images.
-The size of the root image partition is dynamic, while the size of all sub-image partitions are statically defined.
+In a multi image build context there exists one root image, and one or more sub-images.
+The size of the root image partition is dynamic, while the sizes of all sub-image partitions are statically defined.
 
 When the start addresses and sizes have been set, the values are used in the preprocessing of the linker script for each image.
 
@@ -36,11 +37,13 @@ You can define three types of partitions:
 Configuration
 =============
 Each sub-image is required to define its Partition Manager configuration in a file called :file:`pm.yml`.
+This file must be stored in the same folder as the :file:`CMakeLists.txt` of that sub-image.
 
 .. note::
-   The root application does not define its own :file:`pm.yml` because its partition size
-   and placement is implied by the size and placement of the sub image
-   partitions.
+   :file:`pm.yml` is only used for sub images.
+   Hence, the root application does not have to define its own :file:`pm.yml` because its partition size
+   and placement is implied by the size and placement of the sub image partitions.
+   If a root application defines a :file:`pm.yml` it will be silently ignored.
 
 .. _pm_yaml_format:
 
@@ -55,11 +58,13 @@ The format of the :file:`pm.yml` file is as follows:
       option_dict_name:
          option_specific_values
 
-
 Where ``option_dict_name`` can be:
 
 placement: dict
    The placement of the partition relative to other partitions, the end of flash, or the root image partition `app`.
+   A partition with the placement property set is either an *image partition* or a *placeholder partition*.
+   The partition with the same name as the image is the image partitition; all the others are placeholder partitions.
+   It is required that each :file:`pm.yml` defines exactly one *image partition*.
    The placement is formatted as a yaml dict.
    The valid keywords are listed below.
 
@@ -72,8 +77,10 @@ placement: dict
    The valid values in the lists are `app`, `start`, `end`, or the name of any partition.
    It is not possible to place the partition after `end` or before `start`.
 
+
 span: list
    This property lists what partitions this partition should span across.
+   Partitions which have the `span` property set are *phony partitions*,
    This property cannot be used together with the `placement` property.
    Non-existing partitions are ignored.
    The Partition Manager will fail if a span is empty, or the partitions are not consecutive after processing.
@@ -174,6 +181,7 @@ Configuration file preprocessing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Each :file:`pm.yml` file is preprocessed.
+Symbols from Kconfig and DTS are available.
 Example of preprocessing is shown below:
 
 .. code-block:: yaml
@@ -202,20 +210,6 @@ Example of preprocessing is shown below:
 
    #endif /* CONFIG_SOC_NRF9160 */
 
-.. _pm_yaml_partition_types:
-
-Partition types
-~~~~~~~~~~~~~~~
-
-It is required that each :file:`pm.yml` defines exactly one *image partition*.
-This is done by using the same name for the partition as the image name.
-
-All other partitions which have the `placement` property set are *placeholder
-partitions*.
-
-Partitions which have the `span` property set are *phony partitions*,
-and do not occupy space in flash.
-
 .. _pm_build_system:
 
 Build system
@@ -226,7 +220,7 @@ If one or more sub-images are included in a build, a set of properties for that 
 
 These properties are:
 
-Path to :file:`pm.yml`
+   * Path to :file:`pm.yml`
    * Build directory path
    * Path to generated include folder
 
@@ -238,7 +232,7 @@ See :ref:`pm_generated_output_and_usage`.
 
 Generated output and usage
 ==========================
-For each sub-image and the root app, Partition Manager generates three files, one C header file, one Kconfig file, and one YAML file.
+For each sub-image and the root app, Partition Manager generates three files, one C header file :file:`pm_config.h`, one Kconfig file :file:`pm.config`, and one YAML file :file:`partitions.yml`.
 The C header file is used in the C code while the Kconfig file is imported in CMake.
 Both these files contain the start address and size of all partitions.
 The Kconfig file additionally contains the build directory and generated include folder for each image.
