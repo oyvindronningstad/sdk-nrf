@@ -8,6 +8,7 @@
 #include <linker/sections.h>
 #include <errno.h>
 #include <string.h>
+#include <nrfx_nvmc.h>
 
 
 extern const u32_t _image_rom_start;
@@ -45,6 +46,7 @@ __fw_info struct fw_info m_firmware_info =
 	.firmware_size = (u32_t)&_flash_used,
 	.firmware_version = CONFIG_FW_INFO_FIRMWARE_VERSION,
 	.firmware_address = (u32_t)&_image_rom_start,
+	.valid = CONFIG_FW_INFO_VALID_VAL,
 	.abi_in = &abi_getter_in,
 	.abi_out = &abi_getter,
 };
@@ -80,3 +82,15 @@ const struct fw_info_abi *fw_info_abi_find(u32_t id, u32_t flags,
 	return NULL;
 }
 
+
+#define INVALID_VAL 0xFFFF0000
+
+#ifdef CONFIG_NRFX_NVMC
+void fw_info_invalidate(const struct fw_info *fw_info)
+{
+	/* Check if value has been written. */
+	if (fw_info->valid == CONFIG_FW_INFO_VALID_VAL) {
+		nrfx_nvmc_word_write((u32_t)&(fw_info->valid), INVALID_VAL);
+	}
+}
+#endif
