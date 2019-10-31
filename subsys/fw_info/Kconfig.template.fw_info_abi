@@ -5,6 +5,21 @@
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
 
+config $(ABI)_ABI_USE
+	bool "Use the $(ABI) ABI."
+	default n
+	help
+	  Include client code for this ABI. This also puts a request for this
+	  ABI into the firmware info.
+
+config $(ABI)_ABI_PROVIDE
+	bool "Provide this ABI to other images."
+	default n
+	help
+	  Provide this ABI to other images.
+
+if ($(ABI)_ABI_PROVIDE || $(ABI)_ABI_USE)
+
 config $(ABI)_ABI_FLAGS
 	int
 	default $(flags)
@@ -23,3 +38,5 @@ config $(ABI)_ABI_MAX_VER
 	default 255
 	help
 	  The maximum requested version for the $(ABI) ABI.
+
+endif
