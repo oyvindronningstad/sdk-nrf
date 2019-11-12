@@ -89,6 +89,9 @@ struct __packed fw_info {
 	/* Where to place the getter for the ABI provided to this firmware. */
 	u32_t abi_in_len;
 	const struct fw_info_abi_request *abi_in;
+
+	/* Reserved values (set to 0) */
+	u32_t reserved00[4];
 };
 
 /** @cond
@@ -108,6 +111,7 @@ OFFSET_CHECK(struct fw_info, abi_out_len, 28);
 OFFSET_CHECK(struct fw_info, abi_out, 32);
 OFFSET_CHECK(struct fw_info, abi_in_len, 36);
 OFFSET_CHECK(struct fw_info, abi_in, 40);
+OFFSET_CHECK(struct fw_info, reserved00, 44);
 
 OFFSET_CHECK(struct fw_info_abi_request, abi_id, 0);
 OFFSET_CHECK(struct fw_info_abi_request, abi_flags, 4);

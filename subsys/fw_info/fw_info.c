@@ -35,6 +35,7 @@ __fw_info struct fw_info m_firmware_info =
 	.abi_out = _ext_abis_start,
 	.abi_in_len = (u32_t)_ext_abis_req_size,
 	.abi_in = _ext_abis_req_start,
+	.reserved00 = {0, 0, 0, 0},
 };
 
 
