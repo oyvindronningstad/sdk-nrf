@@ -18,9 +18,9 @@
 /* signature check of this will fail, causing .valid to be overwritten. */
 const struct fw_info dummy_s1 = {
 	.magic = {FIRMWARE_INFO_MAGIC},
-	.firmware_address = S1_ADDRESS,
-	.firmware_size = S1_SIZE,
-	.firmware_version = 0xFF,
+	.image_address = S1_ADDRESS,
+	.image_size = S1_SIZE,
+	.image_version = 0xFF,
 	.valid = CONFIG_FW_INFO_VALID_VAL,
 };
 

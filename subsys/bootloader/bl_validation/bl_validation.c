@@ -19,18 +19,18 @@ struct __packed fw_validation_info {
 	u32_t magic[MAGIC_LEN_WORDS];
 
 	/* The address of the start (vector table) of the firmware. */
-	u32_t firmware_address;
+	u32_t image_address;
 
 	/* The hash of the firmware.*/
-	u8_t  firmware_hash[CONFIG_SB_HASH_LEN];
+	u8_t  image_hash[CONFIG_SB_HASH_LEN];
 
 	/* Public key to be used for signature verification. This must be
 	 * checked against a trusted hash.
 	 */
 	u8_t  public_key[CONFIG_SB_PUBLIC_KEY_LEN];
 
-	/* Signature over the firmware as represented by the firmware_address
-	 * and firmware_size in the firmware_info.
+	/* Signature over the firmware as represented by the image_address
+	 * and image_size in the firmware_info.
 	 */
 	u8_t  signature[CONFIG_SB_SIGNATURE_LEN];
 };
@@ -38,9 +38,9 @@ struct __packed fw_validation_info {
 
 /* Static asserts to ensure compatibility */
 OFFSET_CHECK(struct fw_validation_info, magic, 0);
-OFFSET_CHECK(struct fw_validation_info, firmware_address,
+OFFSET_CHECK(struct fw_validation_info, image_address,
 	CONFIG_FW_INFO_MAGIC_LEN);
-OFFSET_CHECK(struct fw_validation_info, firmware_hash,
+OFFSET_CHECK(struct fw_validation_info, image_hash,
 	(CONFIG_FW_INFO_MAGIC_LEN + 4));
 OFFSET_CHECK(struct fw_validation_info, public_key,
 	(CONFIG_FW_INFO_MAGIC_LEN + 4 + CONFIG_SB_HASH_LEN));
@@ -120,26 +120,26 @@ static bool validate_firmware(u32_t fw_dst_address, u32_t fw_src_address,
 	}
 
 	if (!(((u32_t)fwinfo >= fw_src_address)
-		&& (((u32_t)fwinfo + sizeof(*fwinfo))
-			< (fw_src_address + fwinfo->firmware_size)))) {
+		&& (((u32_t)fwinfo + fwinfo->total_size)
+			< (fw_src_address + fwinfo->image_size)))) {
 		PRINT("Firmware info is not within signed region.\n\r");
 		return false;
 	}
 
-	if (fw_dst_address != fwinfo->firmware_address) {
+	if (fw_dst_address != fwinfo->image_address) {
 		PRINT("The firmware doesn't belong at destination addr.\n\r");
 		return false;
 	}
 
 	fw_val_info = validation_info_find(
-		fw_src_address + fwinfo->firmware_size, 4);
+		fw_src_address + fwinfo->image_size, 4);
 
 	if (!fw_val_info) {
 		PRINT("Could not find valid firmware validation info.\n\r");
 		return false;
 	}
 
-	if (fw_val_info->firmware_address != fwinfo->firmware_address) {
+	if (fw_val_info->image_address != fwinfo->image_address) {
 		PRINT("Validation info doesn't belong to this firmware.\n\r");
 		return false;
 	}
@@ -166,8 +166,8 @@ static bool validate_firmware(u32_t fw_dst_address, u32_t fw_src_address,
 		retval = rot_verify(fw_val_info->public_key,
 					(u8_t *)key_data,
 					fw_val_info->signature,
-					(u8_t *)fw_val_info->firmware_address,
-					fwinfo->firmware_size);
+					(u8_t *)fw_val_info->image_address,
+					fwinfo->image_size);
 
 		if (retval != -EHASHINV) {
 			break;

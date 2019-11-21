@@ -28,108 +28,13 @@ extern "C" {
 #define MAGIC_LEN_WORDS (CONFIG_FW_INFO_MAGIC_LEN / sizeof(u32_t))
 
 
-
 /**
- * This struct is used to request an ABI. The bootloader will populate the
- * `abi` pointer with a pointer to an ABI in another image. An ABI fulfills a
- * request if the ID matches, all flags in the request are set in the ABI, and
- * the version falls between the minimum and maximum (inclusive). If `required`
- * is true the bootloader will refuse to boot an image if it cannot find a
- * requested ABI.
- */
-struct __packed fw_info_abi_request {
-	/* The id of the ABI. */
-	u32_t abi_id;
-
-	/* Flags specifying properties of the ABI. */
-	u32_t abi_flags;
-
-	/* The minimum version accepted. */
-	u32_t abi_min_version;
-
-	/* The maximum version accepted. */
-	u32_t abi_max_version;
-
-	/* The ABI is required. */
-	u32_t required;
-
-	/* Where to place a pointer to the ABI. */
-	const struct fw_info_abi **abi;
-};
-
-
-/**
- * This is a data structure that is placed at a specific offset inside a
- * firmware image so it can be consistently read by external parties. The
- * specific offset makes it easy to find, and the magic value at the start
- * guarantees that it contains data of a specific format.
- */
-struct __packed fw_info {
-	/* Magic value to verify that the struct has the correct format. */
-	u32_t magic[MAGIC_LEN_WORDS];
-
-	/* Size of the firmware image code. */
-	u32_t firmware_size;
-
-	/* Monotonically increasing version counter.*/
-	u32_t firmware_version;
-
-	/* The address of the start (vector table) of the firmware. */
-	u32_t firmware_address;
-
-	/* Value that can be modified to invalidate the firmware. Has the value
-	 * CONFIG_FW_INFO_VALID_VAL when valid.
-	 */
-	u32_t valid;
-
-	/* This firmware's ABIs. */
-	u32_t abi_out_len;
-	const struct fw_info_abi *const *abi_out;
-
-	/* Where to place the getter for the ABI provided to this firmware. */
-	u32_t abi_in_len;
-	const struct fw_info_abi_request *abi_in;
-
-	/* Reserved values (set to 0) */
-	u32_t reserved00[4];
-};
-
-/** @cond
- *  Remove from doc building.
- */
-#define OFFSET_CHECK(type, member, value) \
-		BUILD_ASSERT_MSG(offsetof(type, member) == value, \
-				#member " has wrong offset")
-
-/* Static asserts to ensure compatibility */
-OFFSET_CHECK(struct fw_info, magic, 0);
-OFFSET_CHECK(struct fw_info, firmware_size, 12);
-OFFSET_CHECK(struct fw_info, firmware_version, 16);
-OFFSET_CHECK(struct fw_info, firmware_address, 20);
-OFFSET_CHECK(struct fw_info, valid, 24);
-OFFSET_CHECK(struct fw_info, abi_out_len, 28);
-OFFSET_CHECK(struct fw_info, abi_out, 32);
-OFFSET_CHECK(struct fw_info, abi_in_len, 36);
-OFFSET_CHECK(struct fw_info, abi_in, 40);
-OFFSET_CHECK(struct fw_info, reserved00, 44);
-
-OFFSET_CHECK(struct fw_info_abi_request, abi_id, 0);
-OFFSET_CHECK(struct fw_info_abi_request, abi_flags, 4);
-OFFSET_CHECK(struct fw_info_abi_request, abi_min_version, 8);
-OFFSET_CHECK(struct fw_info_abi_request, abi_max_version, 12);
-OFFSET_CHECK(struct fw_info_abi_request, required, 16);
-OFFSET_CHECK(struct fw_info_abi_request, abi, 20);
-/** @endcond
- */
-
-/* For declaring this firmware's firmware info. */
-#define __fw_info Z_GENERIC_SECTION(.firmware_info) __attribute__((used)) const
-
-/**
- * This struct is meant to serve as a header before a list of function pointers
- * (or something else) that constitute the actual ABI. How to use the ABI, such
- * as the signatures of all the functions in the list must be unambiguous for an
- * ID/version combination.
+ * This struct serves as a header before an actual ABI. This header contains
+ * basic metadata about the ABI: A unique identifier, version and flags to be
+ * used for compatibility matching. The payload that comes after this header is
+ * completely implementation dependent for each ABI.
+ * Note: How to use the ABI, such as the signatures of all the functions in the
+ * list must be unambiguous for an ID/version combination.
  */
 struct __packed fw_info_abi {
 	/* The length of this header plus everything after this header. Must be
@@ -147,14 +52,134 @@ struct __packed fw_info_abi {
 	u32_t abi_version;
 };
 
+/** @cond
+ *  Remove from doc building.
+ */
+#define OFFSET_CHECK(type, member, value) \
+		BUILD_ASSERT_MSG(offsetof(type, member) == value, \
+				#member " has wrong offset")
+
+/* Static asserts to ensure compatibility */
+OFFSET_CHECK(struct fw_info_abi, abi_len, 0);
+OFFSET_CHECK(struct fw_info_abi, abi_id, 4);
+OFFSET_CHECK(struct fw_info_abi, abi_flags, 8);
+OFFSET_CHECK(struct fw_info_abi, abi_version, 12);
+/** @endcond
+ */
+
+
+/**
+ * This struct is used to request an ABI. It contains a pointer to a non-
+ * initialized pointer
+ * `abi` pointer with a pointer to an ABI in another image. An ABI fulfills a
+ * request if the ID matches, all flags in the request are set in the ABI, and
+ * the version falls between the minimum and maximum (inclusive). If `required`
+ * is true the image will not function if it has no access to the ABI.
+ */
+struct __packed fw_info_abi_request {
+	/* The minimum abi version. */
+	struct fw_info_abi min_abi;
+
+	/* The maximum version accepted. */
+	u32_t abi_max_version;
+
+	/* The ABI is required. */
+	u32_t required;
+
+	/* Where to place a pointer to the ABI. */
+	const struct fw_info_abi **abi;
+};
+
+/** @cond
+ *  Remove from doc building.
+ */
+/* Static asserts to ensure compatibility */
+OFFSET_CHECK(struct fw_info_abi_request, min_abi, 0);
+OFFSET_CHECK(struct fw_info_abi_request, abi_max_version, 16);
+OFFSET_CHECK(struct fw_info_abi_request, required, 20);
+OFFSET_CHECK(struct fw_info_abi_request, abi, 24);
+/** @endcond
+ */
+
+
+/**
+ * This is a data structure that is placed at a specific offset inside a
+ * firmware image so it can be consistently read by external parties. The
+ * specific offset makes it easy to find, and the magic value at the start
+ * guarantees that it contains data of a specific format.
+ */
+struct __packed fw_info {
+	/* Magic value to verify that the struct has the correct format.
+	 * The magic value will change whenever the format changes.
+	 */
+	u32_t magic[MAGIC_LEN_WORDS];
+
+	/* Total size of this fw_info struct including the ABI lists. */
+	u32_t total_size;
+
+	/* Size of the firmware image code. */
+	u32_t image_size;
+
+	/* Monotonically increasing version counter.*/
+	u32_t image_version;
+
+	/* The address of the start of the image. */
+	u32_t image_address;
+
+	/* The address of the boot point (vector table) of the firmware. */
+	u32_t boot_address;
+
+	/* Value that can be modified to invalidate the firmware. Has the value
+	 * CONFIG_FW_INFO_VALID_VAL when valid.
+	 */
+	u32_t valid;
+
+	/* Reserved values (set to 0) */
+	u32_t reserved[4];
+
+	/* The number of ABIs in the subsequent list. */
+	u32_t abi_out_len;
+
+	/* The number of ABI requests in the subsequent list. */
+	u32_t abi_in_len;
+
+	/* The ABIs and ABI requests in that order. They can be iterated over
+	 * via the abi_len of each entry. To get to the ABI requests, first
+	 * iterate over all ABIs.
+	 */
+	const struct fw_info_abi abis[];
+};
+
+/** @cond
+ *  Remove from doc building.
+ */
+/* Static asserts to ensure compatibility */
+OFFSET_CHECK(struct fw_info, magic, 0);
+OFFSET_CHECK(struct fw_info, total_size, 12);
+OFFSET_CHECK(struct fw_info, image_size, 16);
+OFFSET_CHECK(struct fw_info, image_version, 20);
+OFFSET_CHECK(struct fw_info, image_address, 24);
+OFFSET_CHECK(struct fw_info, boot_address, 28);
+OFFSET_CHECK(struct fw_info, valid, 32);
+OFFSET_CHECK(struct fw_info, reserved, 36);
+OFFSET_CHECK(struct fw_info, abi_out_len, 52);
+OFFSET_CHECK(struct fw_info, abi_in_len, 56);
+OFFSET_CHECK(struct fw_info, abis, 60);
+BUILD_ASSERT_MSG(sizeof(struct fw_info) == offsetof(struct fw_info, abis),
+	"Size of fw_info must assume abis is empty.");
+/** @endcond
+ */
+
+/* For declaring this firmware's firmware info. */
+#define __fw_info Z_GENERIC_SECTION(.firmware_info) __attribute__((used)) const
+
 
 #define __ext_abi(type, name) \
+	Z_GENERIC_SECTION(.ext_abis) \
+	const u8_t _CONCAT(name, _abi_counter) = 0xFF; \
 	BUILD_ASSERT_MSG((sizeof(type) % 4) == 0, \
 			"ext_abi " #type " is not word-aligned"); \
-	extern const type name; \
-	Z_GENERIC_SECTION(.ext_abis) __attribute__((used)) \
-	const type * const _CONCAT(name, _ptr) = &name; \
-	__attribute__((used)) \
+	Z_GENERIC_SECTION(.firmware_info.1) __attribute__((used)) \
 	const type name
 
 
@@ -168,14 +193,17 @@ struct __packed fw_info_abi {
 	}
 
 #define __ext_abi_req(abi_name, req, type, name) \
-	__noinit static const type *name; \
 	Z_GENERIC_SECTION(.ext_abis_req) \
+	const u8_t _CONCAT(name, _abi_req_counter) = 0xFF; \
+	__noinit static const type *name; \
+	Z_GENERIC_SECTION(.firmware_info.2) \
 	__attribute__((used)) \
 	const struct fw_info_abi_request _CONCAT(name, _req) = \
 	{ \
-		.abi_id = abi_name ## _ABI_ID, \
-		.abi_flags = CONFIG_ ## abi_name ## _ABI_FLAGS, \
-		.abi_min_version = CONFIG_ ## abi_name ## _ABI_VER, \
+		.min_abi = FW_INFO_ABI_INIT(abi_name ## _ABI_ID, \
+					CONFIG_ ## abi_name ## _ABI_FLAGS, \
+					CONFIG_ ## abi_name ## _ABI_VER, \
+					sizeof(struct fw_info_abi_request)), \
 		.abi_max_version = CONFIG_ ## abi_name ## _ABI_MAX_VER, \
 		.required = req, \
 		.abi = (void *) &name, \
@@ -260,17 +288,17 @@ static inline const struct fw_info *fw_info_check(u32_t fw_info_addr)
  * from which the firmware info offset is calculated.
  */
 #if defined(PM_S0_PAD_SIZE) && (PM_ADDRESS == PM_S0_IMAGE_ADDRESS)
-	#define VECTOR_OFFSET PM_S0_PAD_SIZE
+	#define FW_INFO_VECTOR_OFFSET PM_S0_PAD_SIZE
 #elif defined(PM_S1_PAD_SIZE) && (PM_ADDRESS == PM_S1_IMAGE_ADDRESS)
-	#define VECTOR_OFFSET PM_S1_PAD_SIZE
+	#define FW_INFO_VECTOR_OFFSET PM_S1_PAD_SIZE
 #elif defined(PM_MCUBOOT_PAD_SIZE) && \
 		(PM_ADDRESS == PM_MCUBOOT_PRIMARY_APP_ADDRESS)
-	#define VECTOR_OFFSET PM_MCUBOOT_PAD_SIZE
+	#define FW_INFO_VECTOR_OFFSET PM_MCUBOOT_PAD_SIZE
 #else
-	#define VECTOR_OFFSET 0
+	#define FW_INFO_VECTOR_OFFSET 0
 #endif
 
-#define CURRENT_OFFSET (CONFIG_FW_INFO_OFFSET + VECTOR_OFFSET)
+#define FW_INFO_CURRENT_OFFSET (CONFIG_FW_INFO_OFFSET + FW_INFO_VECTOR_OFFSET)
 
 static const u32_t fw_info_allowed_offsets[] = {
 					FW_INFO_OFFSET0, FW_INFO_OFFSET1,
@@ -285,11 +313,12 @@ BUILD_ASSERT_MSG(ARRAY_SIZE(fw_info_allowed_offsets) == FW_INFO_OFFSET_COUNT,
 /** @endcond
  */
 
-#if (FW_INFO_OFFSET_COUNT != 5) || ((CURRENT_OFFSET) != (FW_INFO_OFFSET0) && \
-				(CURRENT_OFFSET) != (FW_INFO_OFFSET1) && \
-				(CURRENT_OFFSET) != (FW_INFO_OFFSET2) && \
-				(CURRENT_OFFSET) != (FW_INFO_OFFSET3) && \
-				(CURRENT_OFFSET) != (FW_INFO_OFFSET4))
+#if (FW_INFO_OFFSET_COUNT != 5) \
+			|| ((FW_INFO_CURRENT_OFFSET) != (FW_INFO_OFFSET0) && \
+			(FW_INFO_CURRENT_OFFSET) != (FW_INFO_OFFSET1) && \
+			(FW_INFO_CURRENT_OFFSET) != (FW_INFO_OFFSET2) && \
+			(FW_INFO_CURRENT_OFFSET) != (FW_INFO_OFFSET3) && \
+			(FW_INFO_CURRENT_OFFSET) != (FW_INFO_OFFSET4))
 	#error FW_INFO_OFFSET not set to one of the allowed values.
 #endif
 
@@ -351,7 +380,7 @@ const struct fw_info_abi *fw_info_abi_find(u32_t id, u32_t flags,
  *
  * @note This function needs to have CONFIG_NRF_NVMC enabled.
  *
- * @param[in]  fw_info  The info structure to modify.
+ * @param[in]  fw_info  The info structure to invalidate.
  *                      This memory will be modified directly in flash.
  */
 void fw_info_invalidate(const struct fw_info *fw_info);

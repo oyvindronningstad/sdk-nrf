@@ -15,33 +15,34 @@
 extern const u32_t _image_rom_start;
 extern const u32_t _flash_used;
 extern const struct fw_info _firmware_info_start[];
-extern const struct fw_info_abi * const _ext_abis_start[];
 extern const u32_t _ext_abis_size[];
-extern const struct fw_info_abi_request _ext_abis_req_start[];
 extern const u32_t _ext_abis_req_size[];
-extern const u32_t _ext_abis_req_elem_size[];
 extern const u32_t _fw_info_images_start[];
 extern const u32_t _fw_info_images_size[];
+extern const u32_t _fw_info_size[];
 
 
 __fw_info struct fw_info m_firmware_info =
 {
 	.magic = {FIRMWARE_INFO_MAGIC},
-	.firmware_size = (u32_t)&_flash_used,
-	.firmware_version = CONFIG_FW_INFO_FIRMWARE_VERSION,
-	.firmware_address = (u32_t)&_image_rom_start,
+	.total_size = (u32_t)_fw_info_size,
+	.image_size = (u32_t)&_flash_used,
+	.image_version = CONFIG_FW_INFO_FIRMWARE_VERSION,
+	.image_address = ((u32_t)&_image_rom_start - FW_INFO_VECTOR_OFFSET),
+	.boot_address = (u32_t)&_image_rom_start,
 	.valid = CONFIG_FW_INFO_VALID_VAL,
+	.reserved = {0, 0, 0, 0},
 	.abi_out_len = (u32_t)_ext_abis_size,
-	.abi_out = _ext_abis_start,
 	.abi_in_len = (u32_t)_ext_abis_req_size,
-	.abi_in = _ext_abis_req_start,
-	.reserved00 = {0, 0, 0, 0},
 };
 
 
 Z_GENERIC_SECTION(.fw_info_images) __attribute__((used))
-const u32_t self_image = ((u32_t)&_image_rom_start - VECTOR_OFFSET);
+const u32_t self_image = ((u32_t)&_image_rom_start - FW_INFO_VECTOR_OFFSET);
 
+
+#define ADVANCE_ABI(abi) ((abi) = ((const struct fw_info_abi *) \
+			(((const u8_t *)(abi)) + (abi)->abi_len)))
 
 const struct fw_info_abi *fw_info_abi_find(u32_t id, u32_t flags,
 					u32_t min_version, u32_t max_version)
@@ -53,8 +54,9 @@ const struct fw_info_abi *fw_info_abi_find(u32_t id, u32_t flags,
 		if (!fw_info || (fw_info->valid != CONFIG_FW_INFO_VALID_VAL)) {
 			continue;
 		}
+		const struct fw_info_abi *abi = &fw_info->abis[0];
+
 		for (u32_t j = 0; j < fw_info->abi_out_len; j++) {
-			const struct fw_info_abi *abi = fw_info->abi_out[j];
 
 			if ((abi->abi_id == id)
 			&&  (abi->abi_version >= min_version)
@@ -63,6 +65,7 @@ const struct fw_info_abi *fw_info_abi_find(u32_t id, u32_t flags,
 				/* Found valid abi. */
 				return abi;
 			}
+			ADVANCE_ABI(abi);
 		}
 	}
 	return NULL;
@@ -71,24 +74,30 @@ const struct fw_info_abi *fw_info_abi_find(u32_t id, u32_t flags,
 
 bool fw_info_abi_provide(const struct fw_info *fw_info, bool test_only)
 {
-	__ASSERT((u32_t)_ext_abis_req_elem_size
-			== sizeof(_ext_abis_req_start[0]),
-		"Element size not correct. See abis.ld.");
+	const struct fw_info_abi *abi = &fw_info->abis[0];
+
+	for (u32_t j = 0; j < fw_info->abi_out_len; j++) {
+		ADVANCE_ABI(abi);
+	}
 
 	for (u32_t i = 0; i < fw_info->abi_in_len; i++) {
-		const struct fw_info_abi_request *abi_req = &fw_info->abi_in[i];
-		const struct fw_info_abi *abi;
+		const struct fw_info_abi_request *abi_req
+			= (const struct fw_info_abi_request *)abi;
+		const struct fw_info_abi *new_abi;
 
-		abi = fw_info_abi_find(abi_req->abi_id, abi_req->abi_flags,
-			abi_req->abi_min_version, abi_req->abi_max_version);
+		new_abi = fw_info_abi_find(abi_req->min_abi.abi_id,
+					abi_req->min_abi.abi_flags,
+					abi_req->min_abi.abi_version,
+					abi_req->abi_max_version);
 		if (!test_only) {
 			/* Provide abi, or NULL. */
-			*abi_req->abi = abi;
+			*abi_req->abi = new_abi;
 		}
-		if (!abi && abi_req->required) {
+		if (!new_abi && abi_req->required) {
 			/* Requirement not met */
 			return false;
 		}
+		ADVANCE_ABI(abi);
 	}
 	return true;
 }
