@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [ "$1" == "--help" ] || [ "$1" == "" ]; then
+if [ "$1" == "--help" ] || [ "$1" == "" ] || [ "$2" == "" ]; then
 	echo "Test fprotect driver."
-	echo "Usage: $0 <board>"
-	echo "  e.g. $0 nrf9160_pca10090"
+	echo "Usage: $0 <board> <uart device>"
+	echo "  e.g. $0 nrf9160_pca10090 /dev/ttyACM0"
 	echo ""
 	echo "Will print SUCCESS or FAIL before exiting when running the test."
 	echo "Will return an error code unless SUCCESS."
@@ -15,10 +15,10 @@ mkdir build
 pushd build
 cmake -GNinja -DBOARD=$1 ..
 nrfjprog --recover
-stty -F /dev/ttyACM0 115200 raw noflsh icanon
+stty -F $2 115200 raw noflsh icanon
 ninja flash
 
-while read -t 1 l< /dev/ttyACM0; do
+while read -t 1 l< $2; do
 	echo $l >> uart.log
 done
 cat uart.log
