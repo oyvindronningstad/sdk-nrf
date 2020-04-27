@@ -29,6 +29,8 @@ manifest:
       url-base: https://github.com/ThrowTheSwitch
     - name: armmbed
       url-base: https://github.com/ARMmbed
+    - name: armsoftware
+      url-base: https://github.com/ARM-software
 
   # If not otherwise specified, the projects below should be obtained
   # from the ncs remote.
@@ -111,6 +113,17 @@ manifest:
       repo-path: mbedtls
       revision: mbedtls-2.16.4
       remote: armmbed
+    - name: trusted-firmware-m
+      path: trusted-firmware-m
+      revision: master
+    - name: mbed-crypto
+      path: mbed-crypto
+      revision: mbedcrypto-3.0.1
+      remote: armmbed
+    - name: CMSIS_5
+      path: CMSIS_5
+      revision: 5.5.0
+      remote: armsoftware
 
   # West-related configuration for the nrf repository.
   self:
