@@ -22,6 +22,7 @@ add_subdirectory_ifdef(CONFIG_DFU_TARGET		dfu)
 add_subdirectory_ifdef(CONFIG_IS_SPM		spm)
 add_subdirectory_ifdef(CONFIG_TRUSTED_EXECUTION_NONSECURE nonsecure)
 add_subdirectory_ifdef(CONFIG_MPSL mpsl)
+add_subdirectory_ifdef(CONFIG_TFM trusted_firmware_m)
 
 if (CONFIG_NFC_T2T_NRFXLIB OR
     CONFIG_NFC_T4T_NRFXLIB OR

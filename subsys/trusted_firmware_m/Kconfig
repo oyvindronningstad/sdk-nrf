@@ -1,0 +1,41 @@
+#
+# Copyright (c) 2019 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menu "Trusted Firmware M"
+
+menuconfig TFM
+	bool "Add TF-M secure firmware image"
+	#default y if TRUSTED_EXECUTION_NONSECURE
+
+
+# Define used by partition_manager.py to deduce size of partition.
+# Unable to use the size template due to non-trivial defaults.
+config PM_PARTITION_SIZE_TFM
+	hex "Flash space reserved for TF-M"
+	default 0x20000
+	help
+	  Flash space set aside for the TF-M. Note, the name
+	  of this configuration needs to match the requirements set by the
+	  script 'partition_manager.py'. See pm.yml.
+
+config TFM_CRYPTO
+	bool "Enable the Crypto service"
+	help
+	  Enable TFM_PARTITION_CRYPTO.
+
+# Set new default name for the veneers file.
+if ARM_FIRMWARE_USES_SECURE_ENTRY_FUNCS
+config ARM_ENTRY_VENEERS_LIB_NAME
+	string "Entry Veneers symbol file"
+	default "tfm/s_veneers.a"
+endif
+
+if TFM
+module=TFM
+source "${ZEPHYR_BASE}/../nrf/subsys/partition_manager/Kconfig.template.build_strategy"
+endif
+
+endmenu # TFM
