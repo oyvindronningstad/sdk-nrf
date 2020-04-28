@@ -27,11 +27,11 @@ config TFM_CRYPTO
 	  Enable TFM_PARTITION_CRYPTO.
 
 # Set new default name for the veneers file.
-if ARM_FIRMWARE_USES_SECURE_ENTRY_FUNCS
-config ARM_ENTRY_VENEERS_LIB_NAME
-	string "Entry Veneers symbol file"
-	default "tfm/s_veneers.a"
-endif
+#if ARM_FIRMWARE_USES_SECURE_ENTRY_FUNCS
+#config ARM_ENTRY_VENEERS_LIB_NAME
+#	string "Entry Veneers symbol file"
+#	default "tfm/s_veneers.a"
+#endif
 
 if TFM
 module=TFM
