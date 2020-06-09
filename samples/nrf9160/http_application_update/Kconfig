@@ -7,10 +7,19 @@
 menu "HTTP application update sample"
 
 config DOWNLOAD_HOST
-	string "Download host name"
+	string "Application update host name"
+	help
+	  Host part of URL to application update binary. For example
+	  if the file is stored in http://foo.bar/update.bin the value
+	  of this configuration should be 'foo.bar'
 
 config DOWNLOAD_FILE
-	string "The file to download"
+	string "Application update file name"
+	help
+	  File part of URL to application update binary. For example
+	  if the file is stored in http://foo.bar/update.bin the value
+	  of this configuration should be 'update.bin'
+
 
 config APPLICATION_VERSION
 	int "Application version"
@@ -19,6 +28,35 @@ config APPLICATION_VERSION
 config USE_HTTPS
 	bool
 	prompt "Use HTTPS for download"
+
+config DOWNLOAD_MODEM_HOST
+	string "Modem firmware 0 host name"
+	help
+	  Host part of URL to first of two modem firmwares. For example
+	  if the file is stored in http://foo.bar/mfu_0.bin the value
+	  of this configuration should be 'foo.bar'
+
+config DOWNLOAD_MODEM_0_FILE
+	string "Modem firmware 0 file name"
+	help
+	  File part of URL to first of two modem firmwares. For example
+	  if the file is stored in http://foo.bar/mfu_0.bin the value
+	  of this configuration should be 'mfu_0.bin'
+
+config DOWNLOAD_MODEM_0_UUID
+	hex "First 4 bytes of modem firmware 0 UUID"
+	help
+	  This value is used to ensure that the sample does not download
+	  the same modem firmware as what is already installed in the modem.
+	  This is typically found in the file name of the ZIP which
+	  contains the modem firmware.
+
+config DOWNLOAD_MODEM_1_FILE
+	string "Application update file name"
+	help
+	  File part of URL to first of two modem firmwares. For example
+	  if the file is stored in http://foo.bar/mfu_1.bin the value
+	  of this configuration should be 'mfu_1.bin'
 
 endmenu
 

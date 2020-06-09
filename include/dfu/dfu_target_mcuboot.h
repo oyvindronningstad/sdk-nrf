@@ -42,6 +42,13 @@ int dfu_ctx_mcuboot_set_b1_file(const char *file, bool s0_active,
 				const char **update);
 
 /**
+ * @brief Set buffer to use for stream flash operation.
+ *
+ * @retval true if data matches, false otherwise.
+ */
+int dfu_target_mcuboot_set_buf(uint8_t *buf, size_t len);
+
+/**
  * @brief See if data in buf indicates MCUBoot style upgrade.
  *
  * @retval true if data matches, false otherwise.

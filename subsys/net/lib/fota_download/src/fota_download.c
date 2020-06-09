@@ -9,13 +9,13 @@
 #include <net/fota_download.h>
 #include <net/download_client.h>
 #include <dfu/dfu_target.h>
+#include <dfu/dfu_target_mcuboot.h>
 #include <pm_config.h>
 
 #ifdef PM_S1_ADDRESS
 /* MCUBoot support is required */
 #include <fw_info.h>
 #include <secure_services.h>
-#include <dfu_target_mcuboot.h>
 #endif
 
 LOG_MODULE_REGISTER(fota_download, CONFIG_FOTA_DOWNLOAD_LOG_LEVEL);
@@ -24,6 +24,7 @@ static fota_download_callback_t callback;
 static struct download_client   dlc;
 static struct k_delayed_work    dlc_with_offset_work;
 static int socket_retries_left;
+static uint8_t fota_buf[128];
 
 static void send_evt(enum fota_download_evt_id id)
 {
@@ -317,6 +318,13 @@ int fota_download_init(fota_download_callback_t client_callback)
 
 	if (err != 0) {
 		return err;
+	}
+
+	if (IS_ENABLED(CONFIG_DFU_TARGET_MCUBOOT)) {
+		err = dfu_target_mcuboot_set_buf(fota_buf, sizeof(fota_buf));
+		if (err != 0) {
+			return err;
+		}
 	}
 
 	return 0;
