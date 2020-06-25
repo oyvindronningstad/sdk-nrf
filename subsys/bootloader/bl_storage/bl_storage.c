@@ -73,6 +73,8 @@ u32_t num_public_keys_read(void)
 }
 
 
+static u16_t read_halfword(const u16_t *ptr);
+
 /* Value written to the invalidation token when invalidating an entry. */
 #define INVALID_VAL 0xFFFF0000
 
@@ -90,6 +92,17 @@ int public_key_data_read(u32_t key_idx, u8_t *p_buf, size_t buf_size)
 
 	if (key_idx >= num_public_keys_read()) {
 		return -EFAULT;
+	}
+
+	for (u32_t n = 0; n < num_public_keys_read(); n++) {
+		const u8_t *p_key_n = p_bl_storage_data->key_data[n].hash;
+
+		for (u32_t i = 0; i < (CONFIG_SB_PUBLIC_KEY_HASH_LEN/2); i++) {
+			if (read_halfword(&((const u16_t *)p_key_n)[i])
+					== 0xFFFF) {
+				return -EHASHFF;
+			}
+		}
 	}
 
 	p_key = p_bl_storage_data->key_data[key_idx].hash;

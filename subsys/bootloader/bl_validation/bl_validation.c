@@ -140,18 +140,20 @@ validation_info_find(u32_t start_address, u32_t search_distance)
 
 
 #ifdef CONFIG_SB_VALIDATE_FW_SIGNATURE
-static bool validate_signature(u32_t fw_src_address,
-				const struct fw_info *fwinfo,
+static bool validate_signature(const u32_t fw_src_address,
+				const u32_t fw_size,
 				const struct fw_validation_info *fw_val_info,
 				bool external)
 {
-	int retval = bl_crypto_init();
+	bool validated = false;
+	int init_retval = bl_crypto_init();
 
-	if (retval) {
-		PRINT("bl_crypto_init() returned %d.\n\r", retval);
+	if (init_retval) {
+		PRINT("bl_crypto_init() returned %d.\n\r", init_retval);
 		return false;
 	}
 
+	int retval = -EINVAL;
 	u32_t num_public_keys = num_public_keys_read();
 	bl_root_of_trust_verify_t rot_verify = external ?
 					bl_root_of_trust_verify_external :
@@ -170,7 +172,13 @@ static bool validate_signature(u32_t fw_src_address,
 				/* Invalidated key, try next key. */
 				PRINT("Key %d has been invalidated.\n\r",
 					key_data_idx);
+				retval = -EINVAL;
 				continue;
+			} else if (read_retval == -EHASHFF) {
+				PRINT("A public key is 0xFFFF, which is "
+					"unsupported\n\r");
+				retval = -EHASHFF;
+				break;
 			} else {
 				PRINT("public_key_data_read failed: %d.\n\r",
 					read_retval);
@@ -185,14 +193,15 @@ static bool validate_signature(u32_t fw_src_address,
 		retval = rot_verify(fw_val_info->public_key,
 					key_data,
 					fw_val_info->signature,
-					(u8_t *)fw_src_address,
-					fwinfo->size);
+					(const u8_t *)fw_src_address,
+					fw_size);
 
 		if (retval == 0) {
 			for (u32_t i = 0; i < key_data_idx; i++) {
 				PRINT("Invalidating key %d.\n\r", i);
 				invalidate_public_key(i);
 			}
+			validated = true;
 		}
 		if (retval != -EHASHINV) {
 			break;
@@ -205,14 +214,18 @@ static bool validate_signature(u32_t fw_src_address,
 		return false;
 	}
 
-	PRINT("Firmware signature verified.\n\r");
+	if (validated) {
+		PRINT("Firmware signature verified.\n\r");
+	} else {
+		PRINT("Failed to validate signature.\n\r");
+	}
 
-	return true;
+	return validated;
 }
 
 
 #elif defined(CONFIG_SB_VALIDATE_FW_HASH)
-static bool validate_hash(u32_t fw_src_address, const struct fw_info *fwinfo,
+static bool validate_hash(const u32_t fw_src_address, const u32_t fw_size,
 			const struct fw_validation_info *fw_val_info,
 			bool external)
 {
@@ -223,7 +236,7 @@ static bool validate_hash(u32_t fw_src_address, const struct fw_info *fwinfo,
 		return false;
 	}
 
-	retval = bl_sha256_verify((u8_t *)fw_src_address, fwinfo->size,
+	retval = bl_sha256_verify((const u8_t *)fw_src_address, fw_size,
 			fw_val_info->hash);
 
 	if (retval != 0) {
@@ -237,6 +250,42 @@ static bool validate_hash(u32_t fw_src_address, const struct fw_info *fwinfo,
 	return true;
 }
 #endif
+
+
+static bool within(u32_t addr, u32_t start, u32_t end)
+{
+	if (start > end) {
+		// PRINT("Invalid region (end before start).\n");
+		return false;
+	}
+	if (addr < start) {
+		// PRINT("address not within region (before).\n");
+		return false;
+	}
+	if (addr >= end) {
+		// PRINT("address not within region (after).\n");
+		return false;
+	}
+	return true;
+}
+
+static bool region_within(u32_t inner_start, u32_t inner_end,
+			u32_t start, u32_t end)
+{
+	if (inner_start > inner_end) {
+		// PRINT("Invalid inner region (end before start).\n");
+		return false;
+	}
+	if (!within(inner_start, start, end)) {
+		// PRINT("inner region start not within region.\n");
+		return false;
+	}
+	if (!within(inner_end, start, end)) {
+		// PRINT("inner region end not within region.\n");
+		return false;
+	}
+	return true;
+}
 
 
 static bool validate_firmware(u32_t fw_dst_address, u32_t fw_src_address,
@@ -254,6 +303,21 @@ static bool validate_firmware(u32_t fw_dst_address, u32_t fw_src_address,
 		return false;
 	}
 
+	if (fw_dst_address != fwinfo->address) {
+		PRINT("The firmware doesn't belong at destination addr.\n\r");
+		return false;
+	}
+
+	if (!external && (fw_src_address != fw_dst_address)) {
+		PRINT("src and dst must be equal for local calls.\n\r");
+		return false;
+	}
+
+	if (fw_info_find(fw_src_address) != fwinfo) {
+		PRINT("Firmware info doesn't point to itself.\n\r");
+		return false;
+	}
+
 	if (fwinfo->valid != CONFIG_FW_INFO_VALID_VAL) {
 		PRINT("Firwmare has been invalidated: 0x%x.\n\r",
 			fwinfo->valid);
@@ -267,20 +331,32 @@ static bool validate_firmware(u32_t fw_dst_address, u32_t fw_src_address,
 		return false;
 	}
 
-	if (!(((u32_t)fwinfo >= fw_src_address)
-		&& (((u32_t)fwinfo + fwinfo->total_size)
-			< (fw_src_address + fwinfo->size)))) {
+	if ((fwinfo->size > (PM_S0_SIZE))
+		|| (fwinfo->size > (PM_S1_SIZE))
+		|| (fwinfo->total_size > fwinfo->size)) {
+		PRINT("Invalid size or total_size in firmware info.\n\r");
+		return false;
+	}
+
+	if (!region_within((u32_t)fwinfo, (u32_t)fwinfo + fwinfo->total_size,
+			fw_src_address, (fw_src_address + fwinfo->size))) {
 		PRINT("Firmware info is not within signed region.\n\r");
 		return false;
 	}
 
-	if (fw_dst_address != fwinfo->address) {
-		PRINT("The firmware doesn't belong at destination addr.\n\r");
+	if (!within(fwinfo->boot_address,
+			fw_dst_address, (fw_dst_address + fwinfo->size))) {
+		PRINT("Boot address handler is not within signed region.\n\r");
 		return false;
 	}
 
-	fw_val_info = validation_info_find(
-		fw_src_address + fwinfo->size, 4);
+	if (!within(((const u32_t *)(fwinfo->boot_address))[1],
+			fw_dst_address, (fw_dst_address + fwinfo->size))) {
+		PRINT("Reset handler is not within signed region.\n\r");
+		return false;
+	}
+
+	fw_val_info = validation_info_find(fw_src_address + fwinfo->size, 4);
 
 	if (!fw_val_info) {
 		PRINT("Could not find valid firmware validation info.\n\r");
@@ -293,10 +369,10 @@ static bool validate_firmware(u32_t fw_dst_address, u32_t fw_src_address,
 	}
 
 #ifdef CONFIG_SB_VALIDATE_FW_SIGNATURE
-	return validate_signature(fw_src_address, fwinfo, fw_val_info,
+	return validate_signature(fw_src_address, fwinfo->size, fw_val_info,
 				external);
 #elif defined(CONFIG_SB_VALIDATE_FW_HASH)
-	return validate_hash(fw_src_address, fwinfo, fw_val_info,
+	return validate_hash(fw_src_address, fwinfo->size, fw_val_info,
 				external);
 #else
 	#error "Validation not specified."

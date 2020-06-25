@@ -14,6 +14,9 @@
 extern "C" {
 #endif
 
+
+#define EHASHFF 113
+
 /** @defgroup bl_storage Bootloader storage (protected data).
  * @{
  */
@@ -50,6 +53,7 @@ u32_t num_public_keys_read(void);
  * @retval -EINVAL  Key has been invalidated.
  * @retval -ENOMEM  The provided buffer is too small.
  * @retval -EFAULT  key_idx is too large. There is no key with that index.
+ * @retval -EHASHFF If any key data contains 0xFFFF, which is unsupported.
  */
 int public_key_data_read(u32_t key_idx, u8_t *p_buf, size_t buf_size);
 
