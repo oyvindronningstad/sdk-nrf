@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020 Nordic Semiconductor ASA
+# Copyright (c) 2018 Nordic Semiconductor ASA
 #
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
@@ -11,4 +11,3 @@ project(NONE)
 
 FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
-target_include_directories(app PRIVATE .)

@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 
-#define EHASHFF 113
+#define EHASHFF 113 /* A hash contains too many 0xFs. */
 
 /** @defgroup bl_storage Bootloader storage (protected data).
  * @{
@@ -43,6 +43,14 @@ u32_t s1_address_read(void);
 u32_t num_public_keys_read(void);
 
 /**
+ * @brief Function for reading number of public key data slots.
+ *
+ * @retval 0         if all keys are ok
+ * @retval -EHASHFF  if one or more keys contains an aligned 0xFFFF.
+ */
+int verify_public_keys(void);
+
+/**
  * @brief Function for reading public key data.
  *
  * @param[in]  key_idx  Index of key.
@@ -53,7 +61,6 @@ u32_t num_public_keys_read(void);
  * @retval -EINVAL  Key has been invalidated.
  * @retval -ENOMEM  The provided buffer is too small.
  * @retval -EFAULT  key_idx is too large. There is no key with that index.
- * @retval -EHASHFF If any key data contains 0xFFFF, which is unsupported.
  */
 int public_key_data_read(u32_t key_idx, u8_t *p_buf, size_t buf_size);
 

@@ -1,17 +1,14 @@
 /*
- * Copyright (c) 2018 Nordic Semiconductor ASA
+ * Copyright (c) 2020 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
 #include <ztest.h>
-// #include <bl_validation.h>
 #include <fw_info.h>
 #include <pm_config.h>
-// #include <sys/util.h>
 #include <nrfx_nvmc.h>
 #include <linker/linker-defs.h>
-// #include <devicetree.h>
 #include <power/reboot.h>
 #include <bl_storage.h>
 #include <fw_info.h>
@@ -19,17 +16,13 @@
 
 
 /* These symbols are defined in linker scripts. */
-// extern const u32_t _flash_used[];
-// extern const struct fw_info _firmware_info_start[];
 extern const u32_t _ext_apis_size[];
 extern const u32_t _ext_apis_req_size[];
-// extern const u32_t _fw_info_images_start[];
-// extern const u32_t _fw_info_images_size[];
-// extern const u32_t _fw_info_size[];
 
 extern const struct fw_info m_firmware_info;
 
-u32_t val_info_buf[0x1000];
+#define VAL_INFO_MAX_SIZE 0x1000
+u32_t val_info_buf[VAL_INFO_MAX_SIZE];
 
 void test_validation_neg1(void)
 {
@@ -54,6 +47,7 @@ void test_validation_neg1(void)
 	const struct fw_info *s1_info_copied = fw_info_find(PM_S1_ADDRESS);
 
 	if (s1_info_copied) {
+		/* Second boot */
 		zassert_not_equal(CONFIG_FW_INFO_VALID_VAL,
 			s1_info_copied->valid, "Failed to invalidate S1.\r\n");
 		zassert_equal((u32_t)s1_info_copied, PM_S1_ADDRESS,
@@ -62,6 +56,9 @@ void test_validation_neg1(void)
 
 		zassert_equal(NRFX_SUCCESS, ret, "Erase failed.\r\n");
 	} else {
+		/* First boot */
+
+		/* Copy app */
 		for (u32_t erase_addr = new_addr;
 			erase_addr < (new_addr + copy_len);
 			erase_addr += DT_PROP(DT_CHOSEN(zephyr_flash),
@@ -73,6 +70,7 @@ void test_validation_neg1(void)
 		nrfx_nvmc_words_write(new_addr, (const u32_t *)PM_ADDRESS,
 			(copy_len + 3) / 4);
 
+		/* Write to S1 */
 		nrfx_nvmc_words_write(PM_S1_ADDRESS, &s1_info,
 			(sizeof(s1_info) + 3) / 4);
 
@@ -83,8 +81,9 @@ void test_validation_neg1(void)
 		zassert_equal((u32_t)s1_info_copied, PM_S1_ADDRESS,
 			"S1 info wrongly copied.\r\n");
 
+		/* Modify copied app's validation info */
 		memcpy(val_info_buf, (const u32_t *)(PM_ADDRESS + copy_len),
-			0x1000);
+			VAL_INFO_MAX_SIZE);
 
 		struct __packed {
 			u32_t magic[MAGIC_LEN_WORDS];
@@ -99,8 +98,9 @@ void test_validation_neg1(void)
 
 		val_info->address = s1_info.address;
 		nrfx_nvmc_words_write(s1_info.address + s1_info.size, val_info,
-			0x1000);
+			VAL_INFO_MAX_SIZE);
 
+		/* Reboot */
 		printk("Rebooting. Should fail to validate slot 1.\n");
 		sys_reboot(0);
 		zassert_true(false, "should not come here.");

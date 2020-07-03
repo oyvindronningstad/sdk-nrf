@@ -7,7 +7,6 @@ tests:
       type: multi_line
       ordered: true
       regex:
-        - "A public key is 0xFFFF, which is unsupported"
-        - "Firmware validation failed with error -113."
+        - "A public key contains 0xFFFF, which is unsupported"
         - "Failed to validate, permanently invalidating!"
         - "No bootable image found. Aborting boot."
