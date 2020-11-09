@@ -132,7 +132,7 @@ manifest:
     - name: cddl-gen
       remote: hakonfam
       repo-path: cddl_gen
-      revision: ncs-module
+      revision: 9b7aeceae415fe24ad6f9074f455041e138dd3b2
       path: modules/lib/cddl_gen
 
   # West-related configuration for the nrf repository.
