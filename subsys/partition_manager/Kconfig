@@ -134,6 +134,7 @@ config PM_EXTERNAL_FLASH_BASE
 
 endif
 
+
 config BUILD_WITH_TFM
 	bool
 	select PM_SINGLE_IMAGE
