@@ -138,6 +138,11 @@ config PM_EXTERNAL_FLASH_BASE
 
 endif
 
+config BUILD_WITH_TFM
+	bool
+	select PM_SINGLE_IMAGE
+	select ENTROPY_CC3XX
+
 if BUILD_WITH_TFM
 
 config PM_PARTITION_SIZE_TFM_SRAM
