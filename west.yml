@@ -115,7 +115,7 @@ manifest:
     - name: openthread
       repo-path: sdk-openthread
       path: modules/lib/openthread
-      revision: thread-reference-20200818-ncs1-rc1
+      revision: thread-reference-20200818-ncs1-rc3
     - name: matter
       repo-path: sdk-connectedhomeip
       path: modules/lib/matter
@@ -149,7 +149,7 @@ manifest:
     - name: mbedtls-nrf
       path: mbedtls
       repo-path: mbedtls
-      revision: mbedtls-2.26.0
+      revision: mbedtls-2.26.1
       remote: armmbed
     - name: nanopb
       path: modules/lib/nanopb
